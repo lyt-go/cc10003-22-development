@@ -30,6 +30,13 @@ def list_entries(
     return PageResult(items=items, total=total, page=page, size=size)
 
 
+@router.get("/export")
+def export_entries() -> dict[str, Any]:
+    """导出报表调度清单：返回当前过滤条件下的全量数据。"""
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "reportsch", "total": total, "items": items}
+
+
 @router.get("/{entry_id}", response_model=dict)
 def get_entry(entry_id: int) -> dict:
     """读取单条报表任务明细；不存在时给出可读的错误说明。"""
@@ -50,16 +57,17 @@ def create_entry(payload: EntryPayload) -> ActionResult:
 
 @router.post("/{entry_id}/actions", response_model=ActionResult)
 def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
-    """对单条报表任务执行提交调度评审、确认排期、暂停调度；不允许的动作会被拦下并说明原因。"""
+    """对单条报表任务执行提交调度评审、确认排期、暂停调度。
+
+    确认排期支持在 values 里携带：
+    - schedule_date：排期日期（YYYY-MM-DD），默认当天；
+    - result：成功/失败/中断，默认成功；
+    - reason：失败或中断原因，用于异常产物的可解释说明。
+    不允许的动作会被拦下并说明原因。
+    """
     action = str(payload.values.get("action") or "").strip()
-    entry, message = service.run_action(entry_id, action)
+    extra = {key: value for key, value in payload.values.items() if key != "action"}
+    entry, message = service.run_action(entry_id, action, extra)
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
-
-
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出报表调度清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "reportsch", "total": total, "items": items}

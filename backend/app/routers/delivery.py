@@ -1,4 +1,8 @@
-"""数据服务接口：维护服务版本，覆盖提交服务评审、发布服务、下线服务等动作。"""
+"""数据服务接口：维护服务版本，覆盖提交服务评审、发布服务、下线服务等动作。
+
+发布服务时在 values 中携带 artifact_code 绑定报表产物；另提供交付链路
+追溯接口，从服务版本反查报表任务、数据日期、产物摘要与审计记录。
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -30,6 +34,25 @@ def list_entries(
     return PageResult(items=items, total=total, page=page, size=size)
 
 
+@router.get("/export")
+def export_entries() -> dict[str, Any]:
+    """导出数据服务清单：返回当前过滤条件下的全量数据。"""
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "delivery", "total": total, "items": items}
+
+
+@router.get("/{entry_id}/trace", response_model=dict)
+def trace_entry(entry_id: int) -> dict[str, Any]:
+    """交付链路追溯：返回字段 → 报表任务 → 数据日期 → 产物摘要 → 审计记录。
+
+    未绑定产物的服务返回可解释的空链路，而不是报错或伪造绑定关系。
+    """
+    trace = service.trace_artifact(entry_id)
+    if trace is None:
+        raise HTTPException(status_code=404, detail=f"服务版本 {entry_id} 不存在或已归档")
+    return trace
+
+
 @router.get("/{entry_id}", response_model=dict)
 def get_entry(entry_id: int) -> dict:
     """读取单条服务版本明细；不存在时给出可读的错误说明。"""
@@ -50,16 +73,14 @@ def create_entry(payload: EntryPayload) -> ActionResult:
 
 @router.post("/{entry_id}/actions", response_model=ActionResult)
 def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
-    """对单条服务版本执行提交服务评审、发布服务、下线服务；不允许的动作会被拦下并说明原因。"""
+    """对单条服务版本执行提交服务评审、发布服务、下线服务。
+
+    发布服务需在 values 中携带 artifact_code（报表产物编号）；发布与产物
+    绑定在同一事务内完成，失败时两侧同时退回。不允许的动作会被拦下。
+    """
     action = str(payload.values.get("action") or "").strip()
-    entry, message = service.run_action(entry_id, action)
+    extra = {key: value for key, value in payload.values.items() if key != "action"}
+    entry, message = service.run_action(entry_id, action, extra)
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
-
-
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出数据服务清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "delivery", "total": total, "items": items}

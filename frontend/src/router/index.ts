@@ -19,6 +19,8 @@ const Forecast = () => import('@/views/forecast/index.vue')
 const Tagmgr = () => import('@/views/tagmgr/index.vue')
 const Insight = () => import('@/views/insight/index.vue')
 const Dataval = () => import('@/views/dataval/index.vue')
+const ReportArtifact = () => import('@/views/reportartifact/index.vue')
+const AuditLog = () => import('@/views/auditlog/index.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -42,6 +44,8 @@ const router = createRouter({
     { path: '/tagmgr', name: 'tagmgr', component: Tagmgr },
     { path: '/insight', name: 'insight', component: Insight },
     { path: '/dataval', name: 'dataval', component: Dataval },
+    { path: '/report-artifacts', name: 'reportartifact', component: ReportArtifact },
+    { path: '/audit-logs', name: 'auditlog', component: AuditLog },
   ],
 })
 
